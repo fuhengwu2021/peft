@@ -143,4 +143,8 @@ def get_peft_model(model, peft_config):
         peft_config = _prepare_lora_config(peft_config, model_config)
     else:
         peft_config = _prepare_prompt_learning_config(peft_config, model_config)
-    return MODEL_TYPE_TO_PEFT_MODEL_MAPPING[peft_config.task_type](model, peft_config)
+    pm = MODEL_TYPE_TO_PEFT_MODEL_MAPPING[peft_config.task_type]
+    return pm(model, peft_config)
+
+
+

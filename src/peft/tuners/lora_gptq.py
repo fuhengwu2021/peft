@@ -20,7 +20,7 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import List, Optional, Union
 
-import hiq
+from gptq import QuantLinear
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -28,8 +28,6 @@ from transformers.pytorch_utils import Conv1D
 
 from ..utils import PeftConfig, PeftType, transpose
 
-with hiq.SilencePrint():
-    bnb = hiq.mod('bitsandbytes',False)
 
 @dataclass
 class LoraConfig(PeftConfig):
@@ -115,12 +113,6 @@ class LoraModel(torch.nn.Module):
         self.forward = self.model.forward
 
     def _find_and_replace(self):
-        loaded_in_8bit = getattr(self.model, "is_loaded_in_8bit", False)
-        if loaded_in_8bit and bnb:
-            raise ImportError(
-                "To use Lora with 8-bit quantization, please install the `bitsandbytes` package. "
-                "You can install it with `pip install bitsandbytes`."
-            )
         is_target_modules_in_base_model = False
         is_hf_device_map_available = hasattr(self.model, "hf_device_map")
         kwargs = {
@@ -143,7 +135,7 @@ class LoraModel(torch.nn.Module):
                     is_target_modules_in_base_model = True
                 parent, target, target_name = self._get_submodules(key)
                 bias = target.bias is not None
-                if loaded_in_8bit and bnb and isinstance(target, bnb.nn.Linear8bitLt):
+                if isinstance(target, QuantLinear):
                     kwargs.update(
                         {
                             "has_fp16_weights": target.state.has_fp16_weights,
@@ -152,9 +144,7 @@ class LoraModel(torch.nn.Module):
                             "index": target.index,
                         }
                     )
-                    if self.peft_config.enable_lora is None:
-                        new_module = Linear8bitLt(target.in_features, target.out_features, bias=bias, **kwargs)
-                    else:
+                    if 1:
                         kwargs.update({"enable_lora": self.peft_config.enable_lora})
                         new_module = MergedLinear8bitLt(target.in_features, target.out_features, bias=bias, **kwargs)
                 elif isinstance(target, torch.nn.Linear) and self.peft_config.enable_lora is None:
@@ -533,7 +523,7 @@ if bnb is not None:
                     result += output
             return result
 
-    class MergedLinear8bitLt(bnb.nn.Linear8bitLt, LoraLayer):
+    class MergedQuantLinear(QuantLinear, LoraLayer):
         # Lora implemented in a dense layer
         def __init__(
             self,
@@ -545,8 +535,9 @@ if bnb is not None:
             enable_lora: List[bool] = [False],
             **kwargs,
         ):
-            bnb.nn.Linear8bitLt.__init__(
+            QuantLinear.__init__(
                 self,
+                8,
                 in_features,
                 out_features,
                 bias=kwargs.get("bias", True),
