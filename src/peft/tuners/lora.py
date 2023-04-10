@@ -114,7 +114,7 @@ class LoraModel(torch.nn.Module):
                     (target.qweight.shape[0] * 32) // self.bits, target.bias.shape[0], self.bits, **kwargs
                 )
                 new_module.scales = target.scales
-                new_module.zeros = target.zeros
+                new_module.shift = target.shift
                 new_module.bias = target.bias
                 self._replace_module(parent, target_name, new_module, target)
                 count += 1
