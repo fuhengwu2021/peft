@@ -110,8 +110,9 @@ class LoraModel(torch.nn.Module):
                     is_target_modules_in_base_model = True
                 parent, target, target_name = self.__get_submodules(key)
                 kwargs.update({"enable_lora": [True], "device": target.qweight.device})
+                bs = target.bits if hasattr(target, 'bits') else self.bits
                 new_module = MergedQuantLinear(
-                    (target.qweight.shape[0] * 32) // self.bits, target.bias.shape[0], self.bits, **kwargs
+                    (target.qweight.shape[0] * 32) // bs, target.bias.shape[0], bs, **kwargs
                 )
                 new_module.scales = target.scales
                 new_module.shift = target.shift
@@ -263,12 +264,12 @@ class MergedQuantLinear(QuantLinear, LoraLayer):
     def forward(self, x: torch.Tensor):
         #import pudb; pu.db
         result = super().forward(x)
-        if self.r > 0:
-            drp = self.lora_dropout(x)
-            tmp_a = self.lora_A(drp)
-            tmp_b = self.lora_B(tmp_a)
-            output = tmp_b * self.scaling
-            result += output
-        if torch.any(torch.isnan(result)):
-            print("🔥")
+        #if self.r > 0:
+        drp = self.lora_dropout(x)
+        tmp_a = self.lora_A(drp)
+        tmp_b = self.lora_B(tmp_a)
+        output = tmp_b * self.scaling
+        result += output
+        #if torch.any(torch.isnan(result)):
+        #    print("🔥")
         return result
